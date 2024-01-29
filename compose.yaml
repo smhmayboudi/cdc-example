@@ -99,6 +99,50 @@ services:
       - ./script/cockroach-migrate.sh:/cockroach-migrate.sh:ro
     # working_dir: ""
 
+  debezium-connect:
+    # command: []
+    container_name: debezium-connect
+    depends_on:
+      redpanda-cmd:
+        condition: service_completed_successfully
+      redpanda-console:
+        condition: service_healthy
+    # entrypoint: []
+    environment:
+      BOOTSTRAP_SERVERS: redpanda:9092
+      # CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      CONFIG_STORAGE_TOPIC: inventory.configs
+      GROUP_ID: "1"
+      # KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      # OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      OFFSET_STORAGE_TOPIC: inventory.offset
+      # PLUGIN_PATH: /data/connect-jars
+      # REST_ADVERTISED_HOST_NAME: kafka-connect-rest
+      # STATUS_STORAGE_REPLICATION_FACTOR: "1"
+      STATUS_STORAGE_TOPIC: inventory.status
+      # VALUE_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+    expose:
+      - 8083
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    healthcheck:
+      interval: 10s
+      retries: 5
+      start_period: 10s
+      test: ["CMD-SHELL", "curl --fail http://debezium-connect:8083 || exit 1"]
+      timeout: 5s
+    image: debezium/connect:2.5.0.Final
+    labels:
+      namespace: debezium-connect
+    logging: *logging
+    # platform: linux/amd64
+    ports:
+      - "8083:8083"
+    restart: "no"
+    volumes:
+      - ./.docker/debezium-connect/config.yaml:/etc/debezium-connect/config.yaml:ro
+    # working_dir: ""
+
   # read more https://docs.redpanda.com/current/reference/docker-compose/
   redpanda:
     command:
@@ -115,6 +159,10 @@ services:
       - --rpc-addr=redpanda:33145
       - --schema-registry-addr=internal://0.0.0.0:8081,external://0.0.0.0:18081
       - --smp=1
+      - --check=false
+      - --memory=1G
+      - --node-id=0
+      - --reserve-memory=0M
     container_name: redpanda
     # depends_on: []
     # entrypoint: []
@@ -148,52 +196,82 @@ services:
       - redpanda:/var/lib/redpanda/data
     # working_dir: ""
 
-  redpanda-connectors:
-    # command: []
-    container_name: redpanda-connectors
+  redpanda-cmd:
+    command:
+      - topic
+      - create
+      - cdc
+      - --brokers=redpanda:9092
+    # cluster config set auto_create_topics_enabled true
+    container_name: redpanda-cmd
     depends_on:
       redpanda:
         condition: service_healthy
     # entrypoint: []
-    environment:
-      CONNECT_BOOTSTRAP_SERVERS: redpanda:9092
-      CONNECT_CONFIGURATION: |
-          config.storage.replication.factor=-1
-          config.storage.topic=_internal_connectors_configs
-          group.id=connectors-cluster
-          key.converter=org.apache.kafka.connect.converters.ByteArrayConverter
-          offset.flush.interval.ms=1000
-          offset.storage.replication.factor=-1
-          offset.storage.topic=_internal_connectors_offsets
-          producer.batch.size=131072
-          producer.linger.ms=50
-          status.storage.replication.factor=-1
-          status.storage.topic=_internal_connectors_status
-          value.converter=org.apache.kafka.connect.converters.ByteArrayConverter
-      CONNECT_GC_LOG_ENABLED: "false"
-      CONNECT_HEAP_OPTS: -Xms512M -Xmx512M
-      CONNECT_LOG_LEVEL: info
+    # environment: []
     expose:
-      - 8083
+      - 8081 # Schema Registry API
+      - 8082 # Panda Proxy API
+      - 9092 # Kafka API
+      - 9644 # Admin API
     extra_hosts:
       - host.docker.internal:host-gateway
-    healthcheck:
-      interval: 10s
-      retries: 5
-      start_period: 10s
-      test: ["CMD-SHELL", "curl --fail http://redpanda-connectors:8083 || exit 1"]
-      timeout: 5s
-    image: redpandadata/connectors:v1.0.15
+    image: redpandadata/redpanda:v23.3.4
     labels:
-      namespace: redpanda-connectors
+      namespace: redpanda-cmd
     logging: *logging
     # platform: linux/amd64
-    ports:
-      - "8083:8083"
+    # ports: []
     restart: "no"
-    volumes:
-      - ./.docker/redpanda-connectors/config.yaml:/etc/redpanda-connectors/config.yaml:ro
+    # volumes: []
     # working_dir: ""
+
+  # redpanda-connectors:
+  #   # command: []
+  #   container_name: redpanda-connectors
+  #   depends_on:
+  #     redpanda:
+  #       condition: service_healthy
+  #   # entrypoint: []
+  #   environment:
+  #     CONNECT_BOOTSTRAP_SERVERS: redpanda:9092
+  #     CONNECT_CONFIGURATION: |
+  #         config.storage.replication.factor=-1
+  #         config.storage.topic=_internal_connectors_configs
+  #         group.id=connectors-cluster
+  #         key.converter=org.apache.kafka.connect.converters.ByteArrayConverter
+  #         offset.flush.interval.ms=1000
+  #         offset.storage.replication.factor=-1
+  #         offset.storage.topic=_internal_connectors_offsets
+  #         producer.batch.size=131072
+  #         producer.linger.ms=50
+  #         status.storage.replication.factor=-1
+  #         status.storage.topic=_internal_connectors_status
+  #         value.converter=org.apache.kafka.connect.converters.ByteArrayConverter
+  #     CONNECT_GC_LOG_ENABLED: "false"
+  #     CONNECT_HEAP_OPTS: -Xms512M -Xmx512M
+  #     CONNECT_LOG_LEVEL: info
+  #   expose:
+  #     - 8083
+  #   extra_hosts:
+  #     - host.docker.internal:host-gateway
+  #   healthcheck:
+  #     interval: 10s
+  #     retries: 5
+  #     start_period: 10s
+  #     test: ["CMD-SHELL", "curl --fail http://redpanda-connectors:8083 || exit 1"]
+  #     timeout: 5s
+  #   image: redpandadata/connectors:v1.0.15
+  #   labels:
+  #     namespace: redpanda-connectors
+  #   logging: *logging
+  #   # platform: linux/amd64
+  #   ports:
+  #     - "8083:8083"
+  #   restart: "no"
+  #   volumes:
+  #     - ./.docker/redpanda-connectors/config.yaml:/etc/redpanda-connectors/config.yaml:ro
+  #   # working_dir: ""
 
   redpanda-console:
     # command: []
@@ -224,7 +302,7 @@ services:
     logging: *logging
     # platform: linux/amd64
     ports:
-      - "8080:8080"
+      - "8081:8080"
     restart: "no"
     volumes:
       - ./.docker/redpanda-console/config.yaml:/etc/redpanda-console/config.yaml:ro
@@ -235,6 +313,8 @@ volumes:
   cockroach: {}
   # cockroach-migrate: {}
   # cockroach-migrate-cmd: {}
+  # debezium-connect: {}
   redpanda: {}
+  # redpanda-cmd: {}
   # redpanda-connectors: {}
   # redpanda-console: {}

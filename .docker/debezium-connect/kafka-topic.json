@@ -1,0 +1,22 @@
+{
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.dbname": "cdc",
+    "database.hostname": "cockroach",
+    "database.password": "",
+    "database.port": "26257",
+    "database.sslmode": "disable",
+    "database.user": "root",
+    "plugin.name": "pgoutput",
+    "slot.name" : "debezium",
+    "table.include.list": "cdc",
+    "tasks.max": "1",
+    "topic.creation.default.cleanup.policy": "delete",
+    "topic.creation.default.partitions": "10",
+    "topic.creation.default.replication.factor": "1",
+    "topic.creation.default.retention.ms": "604800000",
+    "topic.creation.enable": "true",
+    "topic.prefix": "cdc"
+  },
+  "name": "pg-source"
+}

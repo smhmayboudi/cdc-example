@@ -152,8 +152,10 @@ connect:
   # An empty array for clusters is the default, but you have to specify at least one cluster, as soon as
   # you enable Kafka connect. Otherwise you'll not be able to start Console.
   clusters:
-      - name: local-connect-cluster
-        url: http://redpanda-connectors:8083
+      - name: debezium-connect
+        url: http://debezium-connect:8083
+      # - name: redpanda-connectors
+      #   url: http://redpanda-connectors:8083
     # - name: xy
     #   url: http://my-cluster:8083
     #   tls:

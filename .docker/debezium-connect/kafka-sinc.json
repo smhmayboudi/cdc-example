@@ -1,0 +1,19 @@
+{
+  "config": {
+    "auto.create": true,
+    "auto.evolve": false,
+    "connection.password": "",
+    "connection.url": "jdbc:postgresql://cockroach:26257/cdc?sslmode=disable",
+    "connection.user": "root",
+    "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",
+    "database.time_zone": "UTC",
+    "insert.mode": "upsert",
+    "pk.fields": "id",
+    "pk.mode": "record_value",
+    "tasks.max": "10",
+    "topics": "cdc",
+    "transforms": "unwrap",
+    "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState"
+  },
+  "name": "pg-sink"
+}
