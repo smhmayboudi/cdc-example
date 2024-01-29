@@ -1,0 +1,106 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/compose-spec/compose-spec/master/schema/compose-spec.json
+
+x-default-logging: &logging
+  driver: json-file
+  options:
+    max-file: 2
+    max-size: 5m
+
+services:
+  cockroach:
+    command:
+      - start-single-node
+      - --accept-sql-without-tls
+      - --http-addr=:8080
+      - --insecure
+      - --listen-addr=:26257
+      - --store=attrs=ssd,path=/var/lib/cockroach/
+    container_name: cockroach
+    # depends_on: []
+    # entrypoint: []
+    # environment: []
+    expose:
+      - 8080 # Panel
+      - 26257 # API
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    healthcheck:
+      interval: 10s
+      retries: 5
+      start_period: 10s
+      test: ["CMD-SHELL", "curl --fail http://cockroach:8080/health || exit 1"]
+      timeout: 5s
+    image: cockroachdb/cockroach:v23.1.13
+    labels:
+      namespace: cockroach
+    logging: *logging
+    # platform: linux/amd64
+    ports:
+      - "8080:8080"
+      - "26257:26257"
+    restart: "no"
+    volumes:
+      - cockroach:/var/lib/cockroach
+    # working_dir: ""
+
+  cockroach-migrate:
+    command:
+      - sql
+      - --file=/init_schema.up.sql
+      - --host=cockroach:26257
+      - --insecure
+    container_name: cockroach-migrate
+    depends_on:
+      cockroach:
+        condition: service_healthy
+    # entrypoint: []
+    # environment: []
+    # expose: []
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    # healthcheck: {}
+    image: cockroachdb/cockroach:v23.1.13
+    labels:
+      namespace: cockroach-migrate
+    logging: *logging
+    # platform: linux/amd64
+    # ports: []
+    restart: "no"
+    volumes:
+      - ./db/init_schema.up.sql:/init_schema.up.sql:ro
+    # working_dir: ""
+
+  cockroach-migrate-cmd:
+    # command: []
+    container_name: cockroach-migrate-cmd
+    depends_on:
+      cockroach-migrate:
+        condition: service_completed_successfully
+    entrypoint:
+      - /bin/sh
+      - -c
+      - -Eefuvx
+      - >-
+        ./cockroach-migrate.sh local cockroach:26257 cdc "" "" "" development
+    # environment: []
+    # expose: []
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    # healthcheck: {}
+    image: migrate/migrate:v4.17.0
+    labels:
+      namespace: cockroach-migrate-cmd
+    logging: *logging
+    # platform: linux/amd64
+    # ports: []
+    restart: "no"
+    volumes:
+      - ./db/cdc/:/db/cdc/:ro
+      - ./script/cockroach-migrate.sh:/cockroach-migrate.sh:ro
+    # working_dir: ""
+
+version: "3.9"
+volumes:
+  cockroach: {}
+  # cockroach-migrate: {}
+  # cockroach-migrate-cmd: {}
